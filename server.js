@@ -31,31 +31,51 @@ var server = http.createServer(function (request, response) {
     request.on("data", (chunk) => {
       array.push(chunk);
     });
+
     request.on("end", () => {
       const string = Buffer.concat(array).toString();
       const obj = JSON.parse(string); //name password
       const user = userArray.find(
         (user) => user.name === obj.name && user.password === obj.password
       );
+
       if (user === undefined) {
         response.statusCode = 400;
         response.setHeader("Content-Type", "text/json;charset=UTF-8");
         response.end(`{"errorCode":4001}`); //errorcode 编码 ，自定义
       } else {
         response.statusCode = 200;
-        response.setHeader("Set-Cookie", "logined=1");
+        response.setHeader("Set-Cookie", `user_id=${user.id}; HttpOnly`); //禁止前端修改cookie
         response.end();
       }
     });
   } else if (path === "/home.html") {
     const cookie = request.headers["cookie"];
-    if (cookie === "loginded===1") {
+    let userId;
+    try {
+      userId = cookie
+        .split(";")
+        .filter((s) => s.indexOf("user_id=") >= 0)[0]
+        .split("=")[1];
+    } catch (error) {}
+
+    if (userId) {
+      const userArray = JSON.parse(fs.readFileSync("./db/users.json"));
+      const user = userArray.find((user) => user.id.toString() === userId);
       const homeHtml = fs.readFileSync("./public/home.html").toString();
-      const string = homeHtml.replace("{{loginStatus}}", "已登陆");
+      let string;
+      if (user) {
+        string = homeHtml
+          .replace("{{loginStatus}}", "已登陆")
+          .replace("{{user.name}}", user.name);
+      } else {
+      }
       response.write(string);
     } else {
       const homeHtml = fs.readFileSync("./public/home.html").toString();
-      const string = homeHtml.replace("{{loginStatus}}", "未登陆");
+      const string = homeHtml
+        .replace("{{loginStatus}}", "未登陆")
+        .replace("{{user.name}}", "");
       response.write(string);
     }
     response.end("home");
@@ -80,7 +100,6 @@ var server = http.createServer(function (request, response) {
       console.log("========" + userArray);
       userArray.push(newUser);
       fs.writeFileSync("./db/users.json", JSON.stringify(userArray));
-
       response.end();
     });
   } else {
@@ -111,9 +130,9 @@ var server = http.createServer(function (request, response) {
     response.write(content);
     response.end();
   }
-
-  /******** 代码结束，下面不要看 ************/
 });
+
+/******** 代码结束，下面不要看 ************/
 
 server.listen(port);
 console.log(
