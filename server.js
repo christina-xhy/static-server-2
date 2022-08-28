@@ -21,8 +21,11 @@ var server = http.createServer(function (request, response) {
 
   /******** 从这里开始看，上面不要看 ************/
 
+  const session = JSON.parse(
+    fs.readFileSync("./session.json").toString()
+  );
   console.log("有个傻子发请求过来啦！路径（带查询参数）为：" + pathWithQuery);
-
+  
   if (path === "/sign_in" && method === "POST") {
     response.setHeader("Content-Type", "text/html;charset=UTF-8");
     const userArray = JSON.parse(fs.readFileSync("./db/users.json"));
@@ -44,32 +47,40 @@ var server = http.createServer(function (request, response) {
         response.setHeader("Content-Type", "text/json;charset=UTF-8");
         response.end(`{"errorCode":4001}`); //errorcode 编码 ，自定义
       } else {
+        //session申明变量生成随机的随机数（random）传入随机数给后端服务器
         response.statusCode = 200;
-        response.setHeader("Set-Cookie", `user_id=${user.id}; HttpOnly`); //禁止前端修改cookie
-        response.end();
+        const random = Math.random();
+        
+        session[random] = { user_id: user.id };
+        fs.writeFileSync("./session,json", JSON.stringify(session));
+        response.setHeader("Set-Cookie", `user_id=${random}; HttpOnly`); //禁止前端修改cookie
       }
+      response.end();
     });
+    //home去获取session.json 的数据
   } else if (path === "/home.html") {
     const cookie = request.headers["cookie"];
-    let userId;
+    let sessionId;
     try {
-      userId = cookie
+      sessionId = cookie
         .split(";")
-        .filter((s) => s.indexOf("user_id=") >= 0)[0]
+        .filter((s) => s.indexOf("session_id=") >= 0)[0]
         .split("=")[1];
     } catch (error) {}
 
-    if (userId) {
+    if (sessionId && session[sessionId]) {
+      const userId = session[sessionId].user_id//得到的是对象.
       const userArray = JSON.parse(fs.readFileSync("./db/users.json"));
       const user = userArray.find((user) => user.id.toString() === userId);
       const homeHtml = fs.readFileSync("./public/home.html").toString();
-      let string;
+      let string = '';//直接等于空
       if (user) {
         string = homeHtml
           .replace("{{loginStatus}}", "已登陆")
           .replace("{{user.name}}", user.name);
-      } else {
-      }
+      }/*  else {
+      /*   string = homeHtml.replace("{{loginStatus}}", "未登陆"); */
+      } 
       response.write(string);
     } else {
       const homeHtml = fs.readFileSync("./public/home.html").toString();
